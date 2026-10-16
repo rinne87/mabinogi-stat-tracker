@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>마비노기 모바일 스탯 매니저 | 캐릭터 & 직업별 목표 스탯 비교</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            mabi: {
+              bg: '#13151a',
+              card: '#1c1f26',
+              panel: '#252932',
+              border: '#323846',
+              gold: '#f5b841',
+              accent: '#4f8cff',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #13151a;
+      color: #e5e7eb;
+      font-family: 'Pretendard', sans-serif;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #13151a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #323846;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .stat-glow-gold {
+      box-shadow: 0 0 25px -5px rgba(245, 184, 65, 0.25);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-30 bg-[#181b22]/95 backdrop-blur border-b border-mabi-border px-4 lg:px-8 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 text-slate-950 font-black text-xl">
+          M
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg md:text-xl font-bold tracking-tight text-white">마비노기 모바일 스탯 매니저</h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-medium">GitHub Pages 호환</span>
+          </div>
+          <p class="text-xs text-gray-400">서버 · 캐릭터 · 직업별 목표 기준표 설정 및 부족한 스탯 실시간 분석</p>
+        </div>
+      </div>
+
+      <!-- Main Mode Tabs & Utility Buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="bg-mabi-bg p-1 rounded-xl border border-mabi-border flex items-center">
+          <button id="tabBtnCharacter" onclick="switchMainView('character')" class="px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all bg-amber-500 text-slate-950 shadow">
+            📊 내 캐릭터 스탯 분석
+          </button>
+          <button id="tabBtnPresets" onclick="switchMainView('presets')" class="px-3.5 py-1.5 rounded-lg text-sm font-semibold transition-all text-gray-400 hover:text-white">
+            🎯 직업별 목표 기준표 관리
+          </button>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+          <button onclick="openOcrModal()" class="px-3 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs md:text-sm font-medium flex items-center gap-1.5 transition">
+            <span>📷</span> 스샷 OCR 자동입력
+          </button>
+          <button onclick="exportDataJson()" title="설정한 모든 캐릭터와 직업 기준을 파일로 백업합니다" class="px-3 py-2 rounded-xl bg-mabi-panel hover:bg-gray-700 text-gray-300 border border-mabi-border text-xs md:text-sm font-medium transition">
+            💾 백업 저장
+          </button>
+          <label title="백업한 JSON 파일을 불러옵니다" class="cursor-pointer px-3 py-2 rounded-xl bg-mabi-panel hover:bg-gray-700 text-gray-300 border border-mabi-border text-xs md:text-sm font-medium transition">
+            📂 불러오기
+            <input type="file" id="importJsonInput" accept=".json" class="hidden" onchange="importDataJson(event)" />
+          </label>
+          <button onclick="resetToSampleData()" title="초기 샘플 상태로 되돌립니다" class="px-2.5 py-2 rounded-xl bg-mabi-panel hover:bg-red-950/50 text-gray-400 hover:text-red-300 border border-mabi-border text-xs transition">
+            🔄 초기화
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6">
+
+    <!-- ================= VIEW 1: CHARACTER STAT ANALYZER ================= -->
+    <section id="viewCharacter" class="space-y-6">
+
+      <!-- Hierarchy Selector Bar: Server > Character > Job Slot -->
+      <div class="bg-mabi-card border border-mabi-border rounded-2xl p-4 md:p-5 shadow-xl">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+          
+          <!-- Step 1: Server Selection -->
+          <div class="lg:col-span-3 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 inline-flex items-center justify-center text-[10px]">1</span>
+                서버 선택
+              </label>
+              <button onclick="promptAddServer()" class="text-xs text-amber-400 hover:text-amber-300 font-medium">+ 서버 추가</button>
+            </div>
+            <div class="flex gap-1.5">
+              <select id="serverSelect" onchange="onServerChange(this.value)" class="flex-1 bg-mabi-panel border border-mabi-border rounded-xl px-3 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-amber-500">
+              </select>
+            </div>
+          </div>
+
+          <!-- Step 2: Character Selection -->
+          <div class="lg:col-span-4 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 inline-flex items-center justify-center text-[10px]">2</span>
+                캐릭터 선택
+              </label>
+              <div class="flex items-center gap-2">
+                <button onclick="promptRenameCharacter()" class="text-xs text-gray-400 hover:text-gray-200">이름변경</button>
+                <button onclick="promptAddCharacter()" class="text-xs text-amber-400 hover:text-amber-300 font-medium">+ 캐릭터 추가</button>
+              </div>
+            </div>
+            <div class="flex gap-1.5">
+              <select id="characterSelect" onchange="onCharacterChange(this.value)" class="flex-1 bg-mabi-panel border border-mabi-border rounded-xl px-3 py-2.5 text-sm font-semibold text-white focus:outline-none focus:border-amber-500">
+              </select>
+              <button onclick="deleteCurrentCharacter()" title="현재 캐릭터 삭제" class="px-2.5 rounded-xl bg-mabi-panel hover:bg-red-950/60 text-gray-400 hover:text-red-400 border border-mabi-border text-xs">
+                🗑️
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 3: Character's Class/Build Slot Selection -->
+          <div class="lg:col-span-5 flex flex-col gap-1.5">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-semibold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                <span class="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 inline-flex items-center justify-center text-[10px]">3</span>
+                클래스(직업) 세팅 슬롯
+              </label>
+              <div class="flex items-center gap-2">
+                <button onclick="openAddSlotModal()" class="text-xs text-amber-400 hover:text-amber-300 font-medium">+ 이 캐릭터에 직업 세팅 추가</button>
+              </div>
+            </div>
+            <div class="flex gap-1.5">
+              <select id="slotSelect" onchange="onSlotChange(this.value)" class="flex-1 bg-mabi-panel border border-mabi-border rounded-xl px-3 py-2.5 text-sm font-semibold text-amber-300 focus:outline-none focus:border-amber-500">
+              </select>
+              <button onclick="deleteCurrentSlot()" title="현재 직업 슬롯 삭제" class="px-2.5 rounded-xl bg-mabi-panel hover:bg-red-950/60 text-gray-400 hover:text-red-400 border border-mabi-border text-xs">
+                🗑️
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Current Hierarchy Breadcrumb & Linked Preset Selector -->
+        <div class="mt-4 pt-3 border-t border-mabi-border/60 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-gray-400">현재 선택 경로:</span>
+            <div id="hierarchyBreadcrumb" class="flex items-center gap-1.5 font-semibold text-white bg-mabi-bg px-3 py-1 rounded-lg border border-mabi-border">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-xs text-gray-400">비교할 직업 목표 기준표:</span>
+            <select id="linkedPresetSelect" onchange="onChangeLinkedPreset(this.value)" class="bg-mabi-bg border border-amber-500/40 rounded-lg px-2.5 py-1 text-xs font-semibold text-amber-300 focus:outline-none">
+            </select>
+            <button onclick="openCurrentPresetEditor()" class="text-xs px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition">
+              ✏️ 이 직업 목표 수치 수정
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main 2-Column Content: Left (Game-style Stat Input Card) & Right (Target Analysis & Diagnosis) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- LEFT COLUMN: Mabinogi Mobile In-Game Style Stat Panel (5 cols on lg) -->
+        <div class="lg:col-span-5 bg-[#1b1d24] border border-mabi-border rounded-3xl p-5 shadow-2xl space-y-4">
+          <div class="flex items-center justify-between border-b border-gray-800 pb-3">
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span>🛡️ 내 캐릭터 현재 스탯</span>
+                <span id="currentSlotBadge" class="text-xs px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-semibold">석궁사수</span>
+              </h2>
+              <p class="text-xs text-gray-400 mt-0.5">숫자를 클릭해 직접 수정하거나 스샷 OCR로 한 번에 입력하세요</p>
+            </div>
+            <button onclick="openOcrModal()" class="text-xs px-2.5 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 font-semibold transition">
+              📷 스샷 인식
+            </button>
+          </div>
+
+          <!-- 1. Primary 5 Stats (힘, 솜씨, 지력, 의지, 행운) -->
+          <div id="primaryStatsGrid" class="grid grid-cols-5 gap-1.5 bg-[#14161c] p-3 rounded-2xl border border-gray-800/80">
+            <!-- Rendered by JS -->
+          </div>
+
+          <!-- 2. Combat Power Stats (공격력, 방어력) -->
+          <div id="combatStatsGrid" class="grid grid-cols-2 gap-3 bg-[#222630] px-4 py-3 rounded-2xl border border-gray-700/50">
+            <!-- Rendered by JS -->
+          </div>
+
+          <!-- 3. Detailed 14 Stats (2 columns x 7 rows, matching exact screenshot order) -->
+          <div class="bg-[#222630] p-4 rounded-2xl border border-gray-700/50">
+            <div class="flex items-center justify-between mb-2.5">
+              <span class="text-xs font-semibold text-gray-400">세부 전투 스탯 (인게임 배치 동일)</span>
+              <span class="text-[11px] text-amber-400/90">⭐ 표시는 현재 직업 핵심 스탯</span>
+            </div>
+            <div id="detailStatsGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-2">
+              <!-- Rendered by JS -->
+            </div>
+          </div>
+
+          <!-- Character Memo -->
+          <div class="pt-1">
+            <label class="block text-xs font-semibold text-gray-400 mb-1">📝 내 세팅 메모 (장비/인챈트/보석 변경 기록 등)</label>
+            <textarea id="slotMemoInput" oninput="onSlotMemoChange(this.value)" rows="2" placeholder="예: 치명타 비약 도핑 전 스탯 / 반지 보석 세공 후 추가타 +300 예정" class="w-full bg-[#14161c] border border-gray-800 rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-amber-500 resize-none"></textarea>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Target Comparison Dashboard (7 cols on lg) -->
+        <div class="lg:col-span-7 space-y-5">
+
+          <!-- Summary Banner Card -->
+          <div id="diagnosisSummaryCard" class="bg-gradient-to-br from-[#232733] to-[#1a1d26] border border-mabi-border rounded-3xl p-5 md:p-6 shadow-2xl space-y-4">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Core Target Stats Progress List -->
+          <div class="bg-mabi-card border border-mabi-border rounded-3xl p-5 md:p-6 shadow-xl space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-mabi-border pb-3">
+              <div>
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                  🎯 필수 및 권장 목표 스탯 달성 현황
+                </h3>
+                <p class="text-xs text-gray-400 mt-0.5">목표 기준 대비 현재 내 캐릭터의 부족분(-) 또는 초과분(+)을 실시간 계산합니다</p>
+              </div>
+              <button onclick="openQuickTargetModal()" class="text-xs px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold transition shadow">
+                ⚙️ 목표 스탯 빠른 설정
+              </button>
+            </div>
+
+            <div id="targetComparisonList" class="space-y-3.5">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Dump / Remaining Stat Investment Box & Full Guide Note -->
+          <div id="dumpAndGuideCard" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Populated by JS -->
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ================= VIEW 2: JOB PRESETS MANAGER ================= -->
+    <section id="viewPresets" class="hidden space-y-6">
+      <div class="bg-mabi-card border border-mabi-border rounded-3xl p-6 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-mabi-border pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">🎯 직업별 목표 스탯 기준표 사전</h2>
+            <p class="text-xs text-gray-400 mt-1">
+              블로그나 공략에서 찾은 직업별/시즌별 권장 스탯(필수 커트라인, 고점 수치, 남은 스탯 몰빵 항목)을 자유롭게 추가하고 수정하세요.
+            </p>
+          </div>
+          <button onclick="createNewPreset()" class="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition">
+            + 새 직업 목표 기준표 만들기
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+          <!-- Preset List Sidebar -->
+          <div class="lg:col-span-4 space-y-2" id="presetSidebarList">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Preset Editor Panel -->
+          <div class="lg:col-span-8 bg-mabi-bg border border-mabi-border rounded-2xl p-5 space-y-5" id="presetEditorContainer">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= MODAL 1: SCREENSHOT OCR MODAL ================= -->
+  <div id="ocrModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-mabi-card border border-mabi-border rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-mabi-border pb-3">
+        <div>
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            📷 스크린샷 스탯 자동 인식 (OCR)
+          </h3>
+          <p class="text-xs text-gray-400 mt-0.5">마비노기 모바일 스탯 창 캡처 이미지를 업로드하거나 <kbd class="px-1.5 py-0.5 bg-gray-800 rounded text-amber-300">Ctrl + V</kbd>로 붙여넣으세요.</p>
+        </div>
+        <button onclick="closeOcrModal()" class="text-gray-400 hover:text-white text-xl font-bold px-2">✕</button>
+      </div>
+
+      <!-- Dropzone / Paste Area -->
+      <div id="ocrDropzone" class="border-2 border-dashed border-indigo-500/40 hover:border-indigo-400 rounded-2xl p-6 text-center bg-mabi-bg/60 transition cursor-pointer" onclick="document.getElementById('ocrFileInput').click()">
+        <input type="file" id="ocrFileInput" accept="image/*" class="hidden" onchange="handleOcrFileSelect(event)" />
+        <div class="text-3xl mb-2">🖼️</div>
+        <p class="text-sm font-semibold text-gray-200">클릭하여 스탯 스크린샷 선택 또는 이 창에서 <span class="text-amber-400">Ctrl + V</span> 붙여넣기</p>
+        <p class="text-xs text-gray-400 mt-1">올려주신 예시 이미지처럼 힘/솜씨~치명타가 보이는 스탯 창 이미지를 넣으면 자동으로 숫자를 추출합니다.</p>
+      </div>
+
+      <!-- Preview & Progress -->
+      <div id="ocrPreviewBox" class="hidden space-y-3">
+        <div class="flex items-center justify-between">
+          <span id="ocrStatusText" class="text-xs font-semibold text-indigo-300">이미지 분석 준비 중...</span>
+          <span id="ocrProgressPercent" class="text-xs font-bold text-amber-400">0%</span>
+        </div>
+        <div class="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+          <div id="ocrProgressBar" class="h-full bg-indigo-500 transition-all duration-200" style="width: 0%"></div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+          <div class="bg-mabi-bg rounded-xl p-2 border border-mabi-border flex items-center justify-center max-h-56 overflow-hidden">
+            <img id="ocrPreviewImg" src="" alt="OCR Preview" class="max-h-52 object-contain rounded" />
+          </div>
+          <div class="bg-mabi-bg rounded-xl p-3 border border-mabi-border flex flex-col">
+            <span class="text-xs font-semibold text-gray-400 mb-1.5">인식된 스탯 미리보기 (적용 전 확인)</span>
+            <div id="ocrParsedResultList" class="flex-1 overflow-y-auto max-h-44 space-y-1 text-xs">
+              <!-- Populated after OCR -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual Text Paste Fallback -->
+      <details class="bg-mabi-bg rounded-xl p-3 border border-mabi-border text-xs">
+        <summary class="cursor-pointer font-semibold text-gray-300 hover:text-white">
+          💡 텍스트로 복사한 스탯 붙여넣기 / 빠른 일괄 텍스트 파싱
+        </summary>
+        <div class="mt-2 space-y-2">
+          <p class="text-gray-400">아이폰/갤럭시 기본 사진 앱의 '텍스트 인식(라이브 텍스트)'으로 복사한 글자나 메모장 내용을 아래에 붙여넣어도 자동으로 파싱됩니다.</p>
+          <textarea id="ocrRawTextInput" rows="3" placeholder="예: 스킬 위력 4,507 치명타 7,972 추가타 1,672 연타 강화 3,383 ..." class="w-full bg-mabi-card border border-mabi-border rounded-lg p-2 text-gray-200"></textarea>
+          <button onclick="parseRawTextToStats()" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold">텍스트에서 스탯 추출하기</button>
+        </div>
+      </details>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-mabi-border">
+        <button onclick="closeOcrModal()" class="px-4 py-2 rounded-xl bg-mabi-panel hover:bg-gray-700 text-gray-300 text-sm font-medium">취소</button>
+        <button id="applyOcrBtn" onclick="applyOcrStatsToCurrentSlot()" disabled class="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-bold text-sm transition">
+          ✅ 인식된 스탯 현재 캐릭터에 반영하기
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL 2: ADD SLOT MODAL ================= -->
+  <div id="addSlotModal" class="fixed inset-0 z-50 hidden bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-mabi-card border border-mabi-border rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-mabi-border pb-3">
+        <h3 class="text-base font-bold text-white">➕ 캐릭터에 새 클래스(직업) 세팅 추가</h3>
+        <button onclick="closeAddSlotModal()" class="text-gray-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">세팅 슬롯 이름 (직업명 또는 세팅 구분)</label>
+          <input id="newSlotNameInput" type="text" placeholder="예: 석궁사수 (본캐), 음유시인, 전사 (레이드용)" class="w-full bg-mabi-bg border border-mabi-border rounded-xl px-3 py-2 text-white focus:outline-none focus:border-amber-500" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">연결할 직업 목표 기준표</label>
+          <select id="newSlotPresetSelect" class="w-full bg-mabi-bg border border-mabi-border rounded-xl px-3 py-2 text-amber-300 focus:outline-none focus:border-amber-500">
+          </select>
+        </div>
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="copyCurrentStatsCheckbox" checked class="rounded bg-mabi-bg border-mabi-border text-amber-500" />
+          <label for="copyCurrentStatsCheckbox" class="text-xs text-gray-300">현재 보고 있는 슬롯의 스탯 수치를 복사해서 시작하기</label>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2 pt-3 border-t border-mabi-border">
+        <button onclick="closeAddSlotModal()" class="px-4 py-2 rounded-xl bg-mabi-panel text-gray-300 text-sm">취소</button>
+        <button onclick="confirmAddSlot()" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm">추가하기</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
